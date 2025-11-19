@@ -1,0 +1,166 @@
+NEURAL NETWORK ARCHITECTURE DIAGRAM
+=====================================
+
+MNIST CLASSIFICATION EXAMPLE (Default in train_numpy.py)
+---------------------------------------------------------
+
+Input Layer          Hidden Layer 1       Hidden Layer 2       Output Layer
+(784 neurons)        (128 neurons)        (64 neurons)         (10 neurons)
+
+   [28×28]               [128]                [64]                [10]
+   pixels                                                      (0-9 digits)
+     |                     |                    |                   |
+     |                     |                    |                   |
+ ┌───────┐           ┌─────────┐          ┌─────────┐        ┌──────────┐
+ │       │           │         │          │         │        │          │
+ │ Input │──────────▶│ Dense   │─────────▶│ Dense   │───────▶│  Dense   │
+ │ (784) │  W₁,b₁   │  (128)  │  W₂,b₂  │  (64)   │ W₃,b₃ │   (10)   │
+ │       │           │         │          │         │        │          │
+ └───────┘           └─────────┘          └─────────┘        └──────────┘
+                           |                    |                   |
+                           ↓                    ↓                   ↓
+                      ┌─────────┐          ┌─────────┐        ┌──────────┐
+                      │  ReLU   │          │  ReLU   │        │ Softmax  │
+                      │ max(0,x)│          │ max(0,x)│        │ exp/sum  │
+                      └─────────┘          └─────────┘        └──────────┘
+                           |                    |                   |
+                           ↓                    ↓                   ↓
+                       Activated            Activated           Probability
+                       Output               Output              Distribution
+                       (128)                (64)                (10 classes)
+
+
+PARAMETER COUNT
+---------------
+Layer 1: 784 × 128 + 128 bias    = 100,480 parameters
+Layer 2: 128 × 64  + 64 bias     = 8,256 parameters
+Layer 3: 64  × 10  + 10 bias     = 650 parameters
+                          TOTAL  = 109,386 parameters
+
+
+FORWARD PROPAGATION FLOW
+-------------------------
+
+Step 1: Input
+  X = [batch_size, 784]  (flattened 28×28 images)
+
+Step 2: Layer 1 (Dense + ReLU)
+  Z₁ = X @ W₁ + b₁              → [batch_size, 128]
+  A₁ = ReLU(Z₁)                 → [batch_size, 128]
+
+Step 3: Layer 2 (Dense + ReLU)
+  Z₂ = A₁ @ W₂ + b₂             → [batch_size, 64]
+  A₂ = ReLU(Z₂)                 → [batch_size, 64]
+
+Step 4: Layer 3 (Dense + Softmax)
+  Z₃ = A₂ @ W₃ + b₃             → [batch_size, 10]
+  ŷ = Softmax(Z₃)               → [batch_size, 10] (probabilities)
+
+Step 5: Loss
+  L = CrossEntropy(ŷ, y)        → scalar
+
+
+BACKWARD PROPAGATION FLOW
+--------------------------
+
+Step 1: Loss gradient
+  dL/dZ₃ = ŷ - y                → [batch_size, 10]
+
+Step 2: Layer 3 gradients
+  dL/dW₃ = A₂ᵀ @ (dL/dZ₃)      → [64, 10]
+  dL/db₃ = sum(dL/dZ₃)          → [10]
+  dL/dA₂ = (dL/dZ₃) @ W₃ᵀ      → [batch_size, 64]
+
+Step 3: Layer 2 gradients
+  dL/dZ₂ = dL/dA₂ ⊙ ReLU'(Z₂)  → [batch_size, 64]
+  dL/dW₂ = A₁ᵀ @ (dL/dZ₂)      → [128, 64]
+  dL/db₂ = sum(dL/dZ₂)          → [64]
+  dL/dA₁ = (dL/dZ₂) @ W₂ᵀ      → [batch_size, 128]
+
+Step 4: Layer 1 gradients
+  dL/dZ₁ = dL/dA₁ ⊙ ReLU'(Z₁)  → [batch_size, 128]
+  dL/dW₁ = Xᵀ @ (dL/dZ₁)       → [784, 128]
+  dL/db₁ = sum(dL/dZ₁)          → [128]
+
+Step 5: Parameter update (using Adam optimizer)
+  W₁ = W₁ - η · Adam(dL/dW₁)
+  b₁ = b₁ - η · Adam(dL/db₁)
+  (repeat for W₂, b₂, W₃, b₃)
+
+
+TRAINING LOOP
+-------------
+
+For each epoch:
+  ┌─────────────────────────────────────────────┐
+  │ For each mini-batch:                        │
+  │   1. Forward pass → compute predictions     │
+  │   2. Compute loss                           │
+  │   3. Backward pass → compute gradients      │
+  │   4. Update parameters using optimizer      │
+  └─────────────────────────────────────────────┘
+
+  Evaluate on validation set
+  Log metrics (loss, accuracy)
+
+
+COMPONENTS OVERVIEW
+-------------------
+
+┌─────────────────────────────────────────────────┐
+│ src/layers.py                                   │
+│  - Dense: W @ X + b                            │
+│  - Forward: compute output                      │
+│  - Backward: compute gradients                  │
+└─────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
+│ src/activations.py                              │
+│  - ReLU: max(0, x)                             │
+│  - Sigmoid: 1/(1+e^-x)                         │
+│  - Tanh: tanh(x)                               │
+│  - Softmax: exp(x)/sum(exp(x))                 │
+└─────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
+│ src/losses.py                                   │
+│  - CrossEntropy: -sum(y·log(ŷ))                │
+│  - MSE: mean((y-ŷ)²)                           │
+└─────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
+│ src/optimizers.py                               │
+│  - SGD: W -= η·dW                              │
+│  - Momentum: adds velocity                      │
+│  - Adam: adaptive learning rates                │
+└─────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
+│ src/model.py                                    │
+│  - NeuralNetwork: orchestrates everything       │
+│  - add(): stack layers                          │
+│  - forward(): propagate forward                 │
+│  - backward(): propagate backward               │
+│  - train_step(): complete training iteration    │
+└─────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
+│ src/utils.py                                    │
+│  - load_mnist(): get MNIST data                │
+│  - create_mini_batches(): batch generator       │
+│  - History: track training metrics              │
+└─────────────────────────────────────────────────┘
+
+
+KEY INSIGHTS
+------------
+
+1. Everything is just matrix multiplication and element-wise operations
+2. Backpropagation = chain rule applied systematically
+3. The gradient flows backward through the network
+4. Each layer computes its own gradients
+5. Optimizer uses gradients to update parameters
+
+For mathematical details, see MATH_OVERVIEW.md
+For usage examples, see USAGE.md
+For experiments, see EXPERIMENTS.md
